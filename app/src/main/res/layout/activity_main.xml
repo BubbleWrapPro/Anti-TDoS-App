@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/main"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/main_background"
+    tools:context=".MainActivity">
+
+    <!-- App Title -->
+    <TextView
+        android:id="@+id/textView"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="24dp"
+        android:text="Anti TDoS App"
+        android:textAlignment="center"
+        android:textColor="@android:color/white"
+        android:textSize="30sp"
+        android:textStyle="bold"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        tools:ignore="HardcodedText" />
+
+    <!-- Icon -->
+    <ImageView
+        android:id="@+id/security_icon"
+        android:layout_width="80dp"
+        android:layout_height="80dp"
+        android:src="@drawable/ic_security"
+        android:tint="@android:color/white"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/textView"
+        tools:ignore="ContentDescription,UseAppTint" />
+
+    <!-- Call Protection Switch -->
+
+    <!-- Protection Status Text -->
+
+    <Switch
+        android:id="@+id/block_switch"
+        android:layout_width="256dp"
+        android:layout_height="65dp"
+        android:padding="8dp"
+        android:text="Activer la Protection d'Appels"
+        android:textColor="@android:color/white"
+        android:textSize="18sp"
+        app:layout_constraintBottom_toTopOf="@+id/settings_button"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.496"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/security_icon"
+        app:layout_constraintVertical_bias="0.312"
+        tools:ignore="HardcodedText,UseSwitchCompatOrMaterialXml,TextContrastCheck" />
+
+    <!-- Settings Button -->
+
+
+    <TextView
+        android:id="@+id/protection_status"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="Statut: Inactif"
+        android:textColor="#FFFFFF"
+        android:textSize="16sp"
+        app:layout_constraintBottom_toTopOf="@+id/settings_button"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.476"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/block_switch"
+        app:layout_constraintVertical_bias="0.056"
+        tools:ignore="HardcodedText,TextContrastCheck" />
+
+
+    <!-- Parameters button -->
+    <Button
+        android:id="@+id/settings_button"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:backgroundTint="#FFFFFF"
+        android:padding="12dp"
+        android:text="Réinitialiser les appels"
+        android:textColor="@color/darkMain"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="@+id/textView"
+        app:layout_constraintVertical_bias="0.772"
+        tools:ignore="HardcodedText" />
+
+    <TextView
+        android:id="@+id/call_count_text"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Nombre d'appels : 0"
+        android:textColor="@android:color/white"
+        android:textSize="16sp"
+        app:layout_constraintBottom_toTopOf="@+id/settings_button"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/protection_status"
+        tools:ignore="HardcodedText,TextContrastCheck" />
+
+
+    <com.google.android.material.textfield.TextInputEditText
+        android:id="@+id/Credits"
+        android:enabled="false"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Created by : Thomas HERIAUD"
+        android:textAlignment="center"
+        android:textStyle="italic"
+        android:textColor="@color/white"
+        android:hint="Underline color change"
+        app:backgroundTint="@color/white"
+        app:layout_constraintBottom_toBottomOf="parent"
+        tools:ignore="HardcodedText,TextContrastCheck,VisualLintTextFieldSize"
+        tools:layout_editor_absoluteX="-3dp" />
+
+
+
+</androidx.constraintlayout.widget.ConstraintLayout>
