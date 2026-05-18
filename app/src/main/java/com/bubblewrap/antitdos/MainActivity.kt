@@ -8,8 +8,8 @@ import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
 import android.widget.Button
-import android.widget.Switch
 import android.widget.TextView
+import com.google.android.material.materialswitch.MaterialSwitch
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
@@ -17,70 +17,101 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.content.edit
+import androidx.core.graphics.toColorInt
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var sharedPref: SharedPreferences
     private lateinit var callCountText: TextView
+    private lateinit var blockSwitch: MaterialSwitch
+    private lateinit var protectionStatus: TextView
 
-    @SuppressLint("UseSwitchCompatOrMaterialCode", "SetTextI18n", "InlinedApi")
+    private val preferenceChangeListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+        when (key) {
+            CallReceiver.KEY_CALL_COUNT -> updateCallCount()
+            CallReceiver.KEY_BLOCKING_ENABLED -> {
+                val isChecked = sharedPref.getBoolean(CallReceiver.KEY_BLOCKING_ENABLED, true)
+                blockSwitch.isChecked = isChecked
+                updateProtectionStatus(isChecked)
+            }
+        }
+    }
+
+    @SuppressLint("SetTextI18n")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContentView(R.layout.activity_main)
 
-        // Mise en place des insets pour l'interface
+        // Setup window insets for edge-to-edge
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main)) { v, insets ->
             val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
             v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom)
             insets
         }
 
-        // Initialisation de SharedPreferences
-        sharedPref = getSharedPreferences("AppPreferences", MODE_PRIVATE)
-
-        // Vérification des permissions
-        checkAndRequestPermissions()
-
-        // Gestion du switch pour activer/désactiver la protection
-        setupProtectionSwitch()
-
-        // Affichage du compteur d'appels
+        sharedPref = getSharedPreferences(CallReceiver.PREFS_NAME, MODE_PRIVATE)
+        
+        // Initialize Views
         callCountText = findViewById(R.id.call_count_text)
-        updateCallCount()
+        blockSwitch = findViewById(R.id.block_switch)
+        protectionStatus = findViewById(R.id.protection_status)
 
-        // Réinitialisation du compteur
+        checkAndRequestPermissions()
+        setupProtectionSwitch()
         setupResetButton()
+        updateCallCount()
+    }
 
-        // Ajout d'un listener pour les changements en temps réel
-        setupSharedPreferencesListener()
+    override fun onResume() {
+        super.onResume()
+        sharedPref.registerOnSharedPreferenceChangeListener(preferenceChangeListener)
+        // Refresh UI state in case it changed while paused (e.g., via notification action)
+        val isChecked = sharedPref.getBoolean(CallReceiver.KEY_BLOCKING_ENABLED, true)
+        blockSwitch.isChecked = isChecked
+        updateProtectionStatus(isChecked)
+        updateCallCount()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        sharedPref.unregisterOnSharedPreferenceChangeListener(preferenceChangeListener)
     }
 
     private fun checkAndRequestPermissions() {
+        val permissionsNeeded = mutableListOf<String>()
+        
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_STATE) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.READ_PHONE_STATE), 1)
+            permissionsNeeded.add(Manifest.permission.READ_PHONE_STATE)
         }
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ANSWER_PHONE_CALLS) != PackageManager.PERMISSION_GRANTED) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.ANSWER_PHONE_CALLS), 1)
+        
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.ANSWER_PHONE_CALLS) != PackageManager.PERMISSION_GRANTED) {
+                permissionsNeeded.add(Manifest.permission.ANSWER_PHONE_CALLS)
             }
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                permissionsNeeded.add(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+
+        if (permissionsNeeded.isNotEmpty()) {
+            ActivityCompat.requestPermissions(this, permissionsNeeded.toTypedArray(), 101)
         }
     }
 
-    @SuppressLint("SetTextI18n", "UseSwitchCompatOrMaterialCode")
     private fun setupProtectionSwitch() {
-        val blockSwitch = findViewById<Switch>(R.id.block_switch)
-        val protectionStatus = findViewById<TextView>(R.id.protection_status)
+        val isChecked = sharedPref.getBoolean(CallReceiver.KEY_BLOCKING_ENABLED, true)
+        blockSwitch.isChecked = isChecked
+        updateProtectionStatus(isChecked)
 
-        val isSwitchChecked = sharedPref.getBoolean("call_blocking_enabled", false)
-        blockSwitch.isChecked = isSwitchChecked
-        updateProtectionStatus(protectionStatus, isSwitchChecked)
-
-        blockSwitch.setOnCheckedChangeListener { _, isChecked ->
+        blockSwitch.setOnCheckedChangeListener { _, isCheckedNow ->
             sharedPref.edit {
-                putBoolean("call_blocking_enabled", isChecked)
+                putBoolean(CallReceiver.KEY_BLOCKING_ENABLED, isCheckedNow)
             }
-            updateProtectionStatus(protectionStatus, isChecked)
+            updateProtectionStatus(isCheckedNow)
         }
     }
 
@@ -88,40 +119,25 @@ class MainActivity : AppCompatActivity() {
         val reset = findViewById<Button>(R.id.settings_button)
         reset.setOnClickListener {
             sharedPref.edit {
-                putInt("call_count", 0)
-            }
-        }
-    }
-
-    @SuppressLint("UseSwitchCompatOrMaterialCode")
-    private fun setupSharedPreferencesListener() {
-        sharedPref.registerOnSharedPreferenceChangeListener { _, key ->
-            if (key == "call_count") {
-                updateCallCount()
-            } else if (key == "call_blocking_enabled") {
-                val blockSwitch = findViewById<Switch>(R.id.block_switch)
-                val protectionStatus = findViewById<TextView>(R.id.protection_status)
-                val isChecked = sharedPref.getBoolean("call_blocking_enabled", false)
-                blockSwitch.isChecked = isChecked
-                updateProtectionStatus(protectionStatus, isChecked)
+                putInt(CallReceiver.KEY_CALL_COUNT, 0)
             }
         }
     }
 
     @SuppressLint("SetTextI18n")
     private fun updateCallCount() {
-        val callCount = sharedPref.getInt("call_count", 0)
+        val callCount = sharedPref.getInt(CallReceiver.KEY_CALL_COUNT, 0)
         callCountText.text = "Nombre d'appels : $callCount"
     }
 
     @SuppressLint("SetTextI18n")
-    private fun updateProtectionStatus(protectionStatus: TextView, isActive: Boolean) {
+    private fun updateProtectionStatus(isActive: Boolean) {
         if (isActive) {
             protectionStatus.text = "Statut: Actif"
-            protectionStatus.setTextColor(Color.GREEN)
+            protectionStatus.setTextColor("#2E7D32".toColorInt()) // Dark Green
         } else {
             protectionStatus.text = "Statut: Inactif"
-            protectionStatus.setTextColor(Color.LTGRAY)
+            protectionStatus.setTextColor("#757575".toColorInt()) // Grey
         }
     }
 }
