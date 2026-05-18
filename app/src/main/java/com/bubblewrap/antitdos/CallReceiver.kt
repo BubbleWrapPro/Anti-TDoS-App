@@ -15,58 +15,57 @@ import android.util.Log
 import androidx.annotation.RequiresApi
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
+import androidx.core.content.edit
 
 @Suppress("DEPRECATION")
 class CallReceiver : BroadcastReceiver() {
 
-    @Suppress("KotlinConstantConditions")
     @RequiresApi(Build.VERSION_CODES.O)
     override fun onReceive(context: Context, intent: Intent) {
+        val sharedPref = context.getSharedPreferences("AppPreferences", Context.MODE_PRIVATE)
+        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+        // Handle the disable action from the notification
         if (intent.action == "com.bubblewrap.antitdos.DISABLE_CALL_BLOCKING") {
-            val sharedPref = context.getSharedPreferences("AppPreferences", Context.MODE_PRIVATE)
-            with(sharedPref.edit()) {
+            sharedPref.edit {
                 putBoolean("call_blocking_enabled", false)
-                apply()
             }
-            return // Quitte la méthode après désactivation
+            notificationManager.cancel(channelId)
+            return
         }
 
         if (intent.action == TelephonyManager.ACTION_PHONE_STATE_CHANGED) {
             val state = intent.getStringExtra(TelephonyManager.EXTRA_STATE)
             if (state == TelephonyManager.EXTRA_STATE_RINGING) {
 
-                // Retrieve SharedPreferences and check if call blocking is enabled
-                val sharedPref = context.getSharedPreferences("AppPreferences", Context.MODE_PRIVATE)
-                sharedPref.getBoolean("call_blocking_enabled", true)
+                // Check if call blocking is enabled
+                val isBlockingEnabled = sharedPref.getBoolean("call_blocking_enabled", false)
+                if (!isBlockingEnabled) return
+
                 val callTimestamps = sharedPref.getStringSet("call_timestamps", mutableSetOf())?.toMutableSet() ?: mutableSetOf()
                 val currentTime = System.currentTimeMillis()
-                val callCount = sharedPref.getInt("call_count", 0)
-                val newCallCount = callCount + 1
-
-                // Save the new call count in SharedPreferences
-                with(sharedPref.edit()) {
-                    putInt("call_count", newCallCount)
-                    apply()
-                }
-
+                
+                // Remove timestamps older than 1 minute
                 callTimestamps.removeAll { timestamp ->
                     val time = timestamp.toLongOrNull()
                     time != null && (currentTime - time) > 60000
                 }
 
+                // Add current call timestamp
                 callTimestamps.add(currentTime.toString())
 
-                with(sharedPref.edit()) {
+                // Update call count and timestamps in SharedPreferences
+                val callCount = sharedPref.getInt("call_count", 0)
+                sharedPref.edit {
+                    putInt("call_count", callCount + 1)
                     putStringSet("call_timestamps", callTimestamps)
-                    apply()
                 }
 
-                // Check for high call volume and notify user
+                // Check for high call volume (3 or more calls in 1 minute)
                 if (callTimestamps.size > 2) {
                     "High call volume detected".logEvent(context)
                     notifyUser(context)
-                    Log.d("3rd call", "Notification envoyée")
-
+                    
                     val telecomManager = context.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager
                     val readPhoneStatePermissionGranted = ActivityCompat.checkSelfPermission(
                         context,
@@ -77,85 +76,69 @@ class CallReceiver : BroadcastReceiver() {
                         Manifest.permission.ANSWER_PHONE_CALLS
                     ) == PackageManager.PERMISSION_GRANTED
 
-                    if (!answerPhoneCallsPermissionGranted) {
-                        Log.d("Permissions non accordées", "ANSWER_PHONE_CALLS n'est pas accordée")
-                        return
-                    }
-                    Log.d("3rd call",
-                        "Les permissions suivantes sont accordées : Lecture de l'état du téléphone = $readPhoneStatePermissionGranted, " +
-                                "Répondre aux appels = $answerPhoneCallsPermissionGranted, Télécom Manager = $telecomManager")
-                    if (readPhoneStatePermissionGranted && answerPhoneCallsPermissionGranted && telecomManager != null
-                    ) {
-                        if (state == TelephonyManager.EXTRA_STATE_RINGING) {
-                            Log.d("3rd call", "Le téléphone sonne")
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                                Log.d("3rd call", "L'appel est coupé")
-                                telecomManager.endCall()
-                            }
-
-
+                    if (readPhoneStatePermissionGranted && answerPhoneCallsPermissionGranted && telecomManager != null) {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                            Log.d("CallReceiver", "Blocking call due to high volume")
+                            telecomManager.endCall()
                         }
-
+                    } else {
+                        Log.d("CallReceiver", "Missing permissions or TelecomManager to block call")
                     }
+                }
             }
         }
     }
-}
 
-private val channelName: String = "TDoS_Channel"
-private val channelId: Int = 1
+    private val channelName: String = "TDoS_Channel"
+    private val channelId: Int = 1
 
-// Function to display a notification with "Disable Call Blocking" action
-private fun notifyUser(context: Context) {
-    val notificationManager: NotificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+    private fun notifyUser(context: Context) {
+        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-    // Create notification channel if needed
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-        val channel = NotificationChannel(
-            channelName,
-            "Anti TDoS Notifications",
-            NotificationManager.IMPORTANCE_HIGH
-        ).apply {
-            description = "Notifications for potential TDoS attacks"
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                channelName,
+                "Anti TDoS Notifications",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Notifications for potential TDoS attacks"
+            }
+            notificationManager.createNotificationChannel(channel)
         }
-        notificationManager.createNotificationChannel(channel)
-    }
 
-    // Intent to disable call blocking
-    val disableBlockingIntent = Intent(context, CallReceiver::class.java).apply {
-        action = "com.bubblewrap.antitdos.DISABLE_CALL_BLOCKING"
-    }
-    val pendingDisableBlockingIntent = PendingIntent.getBroadcast(
-        context,
-        0,
-        disableBlockingIntent,
-        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-    )
-
-    // Build the notification
-    val notification = NotificationCompat.Builder(context, channelName)
-        .setSmallIcon(android.R.drawable.ic_dialog_alert)
-        .setContentTitle("Potential TDoS Attack Detected")
-        .setContentText("High volume of calls detected. Call blocking is active.")
-        .setPriority(NotificationCompat.PRIORITY_HIGH)
-        .addAction(
-            android.R.drawable.ic_menu_close_clear_cancel,
-            "Disable Call Blocking",
-            pendingDisableBlockingIntent
+        val disableBlockingIntent = Intent(context, CallReceiver::class.java).apply {
+            action = "com.bubblewrap.antitdos.DISABLE_CALL_BLOCKING"
+        }
+        val pendingDisableBlockingIntent = PendingIntent.getBroadcast(
+            context,
+            0,
+            disableBlockingIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-        .build()
 
-    notificationManager.notify(channelId, notification)
-}
+        val notification = NotificationCompat.Builder(context, channelName)
+            .setSmallIcon(android.R.drawable.ic_dialog_alert)
+            .setContentTitle("Potential TDoS Attack Detected")
+            .setContentText("High volume of calls detected. Call blocking is active.")
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .addAction(
+                android.R.drawable.ic_menu_close_clear_cancel,
+                "Disable Call Blocking",
+                pendingDisableBlockingIntent
+            )
+            .setAutoCancel(true)
+            .build()
 
-private fun String.logEvent(context: Context) {
-    val sharedPref = context.getSharedPreferences("AppPreferences", Context.MODE_PRIVATE)
-    val logEntries = sharedPref.getStringSet("log_entries", mutableSetOf())?.toMutableSet() ?: mutableSetOf()
-    logEntries.add("${System.currentTimeMillis()}: $this")
-
-    with(sharedPref.edit()) {
-        putStringSet("log_entries", logEntries)
-        apply()
+        notificationManager.notify(channelId, notification)
     }
-}
+
+    private fun String.logEvent(context: Context) {
+        val sharedPref = context.getSharedPreferences("AppPreferences", Context.MODE_PRIVATE)
+        val logEntries = sharedPref.getStringSet("log_entries", mutableSetOf())?.toMutableSet() ?: mutableSetOf()
+        logEntries.add("${System.currentTimeMillis()}: $this")
+
+        sharedPref.edit {
+            putStringSet("log_entries", logEntries)
+        }
+    }
 }
