@@ -33,7 +33,6 @@
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.PHONE_STATE" />
-                <action android:name="com.bubblewrap.antitdos.DISABLE_CALL_BLOCKING" />
             </intent-filter>
         </receiver>
 

@@ -88,6 +88,7 @@ class CallReceiver : BroadcastReceiver() {
     private fun notifyUser(context: Context) {
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
@@ -101,7 +102,9 @@ class CallReceiver : BroadcastReceiver() {
 
         val disableBlockingIntent = Intent(context, CallReceiver::class.java).apply {
             action = ACTION_DISABLE_BLOCKING
+            setPackage(context.packageName)
         }
+
         val pendingDisableBlockingIntent = PendingIntent.getBroadcast(
             context,
             0,
